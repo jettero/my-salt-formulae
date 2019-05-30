@@ -1,0 +1,109 @@
+
+{% if grains.os == 'Arch' %}
+{% set build_packages = [ 'bzip2', 'tar', 'gzip', 'make', 'gcc' ] %}
+{% else %}
+{% set build_packages = ['build-essential'] %}
+{% endif %}
+
+{% set _pp = salt['pillar.get']('python:pure', []) %}
+{% do _pp.extend( salt['pillar.get']('python:venv', {}).values() | map(attribute='py') ) %}
+{% set pure_python = _pp | map('string') | unique | sort %}
+
+{#- for use in stateslists that need a virtual env #}
+{%- macro _python_venv(name, pure_ver) %}
+{%- set base = kwargs.base | default('/opt/venv/{0}'.format(name)) %}
+{%- set pybin = '{0}/bin/python'.format(base) %}
+{%- set pydoc = '{0}/bin/pydoc'.format(base) %}
+{%- set vuser = kwargs.get('user', 'root') %}
+{%- set vgroup = kwargs.get('group', 'root') %}
+{%- set spybin = '/opt/pure/python/{0}/bin/python'.format(pure_ver) %}
+
+pvcc-{{ pybin }}:
+  pyverchk.compare:
+    - name: {{ spybin }}
+    - target: {{ pybin }}
+    - require:
+      - file: {{ spybin }}
+
+# virtualenv.managed doesn't seem to support watch
+# so we fake it by removing the binary
+fa-{{ pybin }}:
+  file.absent:
+    - name: {{ pybin }}
+    - onchanges:
+      - pyverchk: pvcc-{{ pybin }}
+
+{{ base }}:
+  virtualenv.managed:
+    - user:  {{ vuser }}
+    - group: {{ vgroup }}
+    - venv_bin: /opt/pure/python/{{ pure_ver }}/bin/virtualenv
+    - python: {{ spybin }}
+    {%- for k in kwargs %}
+    {%- if kwargs[k] %}
+    - '{{ k }}': {{ kwargs[k] | json }}
+    {%- endif %}
+    {%- endfor %}
+    - require:
+      - file: {{ spybin }}
+      - umask: '0022'
+      - file: fa-{{ pybin }}
+
+post-pyvenv-fixup-{{ base }}:
+  umask.fixup:
+    - name: {{ base }}
+    - noisy: true
+
+{{ pydoc }}:
+  file.managed:
+    - user:  {{ vuser }}
+    - group: {{ vgroup }}
+    - mode: '0755'
+    - contents: |
+        #!{{ pybin }}
+
+        import pydoc
+        if __name__ == '__main__':
+            pydoc.cli()
+
+{{ pybin }}:
+  file.exists:
+    - require:
+      - virtualenv: {{ base }}
+{%- endmacro %}
+
+{%- macro venv_pip_installed_options(_venv) %}
+    {%- if '-' not in _venv %}
+    {%- set _venv = '/opt/venv/{0}'.format(_venv) %}
+    {%- endif %}
+    - user:  '{{ kwargs.user | default("root")  }}'
+    # group: '{{ kwargs.group | default("root") }}'
+    - bin_env: {{ _venv }}
+    - require:
+      - file: {{ _venv + '/bin/python' }}
+    {%- for k in kwargs %}
+    {%- if kwargs[k] %}
+    - '{{ k }}': {{ kwargs[k] | json }}
+    {%- endif %}
+    {%- endfor %}
+{%- endmacro %}
+
+{%- macro python3_venv(name) %}
+{# TODO: this 3.6 should be the max in _pp with int(i)==3 #}
+{{ _python_venv(name, 3.6, **kwargs) }}
+{%- endmacro %}
+
+{%- macro python2_venv(name) %}
+{# TODO: this 2.7 should be the max in _pp with int(i)==2 #}
+{{ _python_venv(name, 2.7, **kwargs) }}
+{%- endmacro %}
+
+{%- macro github_pip_url(name, version) %}
+  {%- set user = kwargs.get('user', 'jettero') %}
+  {%- set tag  = kwargs.get('tag', 'v' + version) %}
+  {%- set repo = kwargs.get('repo', 'https://github.com/{user}/{name}').format(user=user, name=name) %}
+  {{- 'git+{repo}@{tag}#egg={egg}=={version}'.format(repo=repo, tag=tag, egg=name, version=version) }}
+{%- endmacro %}
+
+# _pp: {{ _pp }}
+# pure_python: {{ pure_python }}
