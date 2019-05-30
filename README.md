@@ -11,7 +11,9 @@ defined in pillar.
 
 # pure-salt
 
-Requires and uses the pure-pythons described above.
+Requires and uses the pure-pythons described above. Like the pure-python
+formula, this requires some supporting pillar (see
+`example-pillar/pure-salt.sls`)
 
 # dl-repo
 
