@@ -1,4 +1,4 @@
-{% from 'python/map.jinja' import pure_python, build_packages %}
+{% from 'pure-python/map.jinja' import pure_python, build_packages %}
 
 include:
   - dl-repo

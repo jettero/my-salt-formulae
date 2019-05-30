@@ -8,9 +8,7 @@ blah:
 #}
 
 include:
-  - umask
-  - local-accounts
-  - python.pure
+  - pure-python.pure
 
 py-build-pkgs:
   pkg.installed:
@@ -18,7 +16,7 @@ py-build-pkgs:
        - gcc
        - make
 
-{%- from 'python/map.jinja' import python3_venv, python2_venv %}
+{%- from 'pure-python/map.jinja' import python3_venv, python2_venv %}
 
 {%- set venvs  = salt['pillar.get']('python:venv', {}) %}
 {%- set def_py = salt['pillar.get']('python:default', 3.6) %}
